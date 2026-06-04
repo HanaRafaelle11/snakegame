@@ -3,71 +3,85 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake AAA FIX</title>
+<title>Snake Play Store Edition</title>
 
 <style>
 body{
 margin:0;
-background:radial-gradient(circle at top,#0f172a,#020617);
+font-family:system-ui;
+background:#0b1220;
+color:white;
 display:flex;
 justify-content:center;
 align-items:center;
 height:100vh;
-font-family:system-ui;
-color:white;
+overflow:hidden;
 }
 
-.container{text-align:center;}
+/* ===== APP CONTAINER ===== */
+.app{
+width:100%;
+max-width:460px;
+text-align:center;
+}
 
+/* ===== SCREENS ===== */
+.screen{
+display:none;
+flex-direction:column;
+align-items:center;
+gap:12px;
+}
+
+.screen.active{
+display:flex;
+}
+
+/* ===== CANVAS ===== */
 canvas{
-background:#0b1220;
-border-radius:18px;
-box-shadow:0 30px 80px rgba(0,0,0,.7);
+background:#0f172a;
+border-radius:16px;
+box-shadow:0 25px 70px rgba(0,0,0,.6);
 touch-action:none;
 }
 
+/* ===== BUTTON ===== */
+button{
+padding:12px 18px;
+border:none;
+border-radius:12px;
+background:#38bdf8;
+font-weight:bold;
+cursor:pointer;
+}
+
+/* ===== HUD ===== */
 .hud{
 display:flex;
 justify-content:space-between;
-width:420px;
-margin:10px auto;
+width:100%;
+padding:10px;
 font-size:14px;
 opacity:.9;
 }
 
-button{
-border:none;
-border-radius:12px;
-padding:10px 14px;
-font-weight:bold;
-background:#38bdf8;
-cursor:pointer;
-}
-
-button:active{transform:scale(.95);}
-
-/* D-PAD AAA */
+/* ===== DPAD ===== */
 .dpad{
-margin-top:14px;
+margin-top:10px;
 display:grid;
-grid-template-columns:90px 90px 90px;
-grid-template-rows:90px 90px 90px;
-gap:10px;
+grid-template-columns:80px 80px 80px;
+grid-template-rows:80px 80px 80px;
+gap:8px;
 justify-content:center;
 }
 
 .dpad button{
-width:90px;
-height:90px;
-font-size:30px;
+width:80px;
+height:80px;
+font-size:26px;
 background:rgba(255,255,255,.06);
 color:white;
-border-radius:18px;
-}
-
-.dpad button:active{
-background:rgba(255,255,255,.18);
-transform:scale(.9);
+border-radius:14px;
 }
 
 .empty{visibility:hidden;}
@@ -80,11 +94,22 @@ transform:scale(.9);
 
 <body>
 
-<div class="container">
+<div class="app">
+
+<!-- ========== MENU ========== -->
+<div id="menu" class="screen active">
+<h1>🐍 Snake</h1>
+<p>Play Store Edition</p>
+<button onclick="startGame()">Jogar</button>
+</div>
+
+<!-- ========== GAME ========== -->
+<div id="gameScreen" class="screen">
 
 <div class="hud">
 <div>Score: <span id="score">0</span></div>
 <div>Level: <span id="level">1</span></div>
+<div>Best: <span id="best">0</span></div>
 </div>
 
 <canvas id="game"></canvas>
@@ -109,28 +134,59 @@ transform:scale(.9);
 
 </div>
 
+<!-- ========== GAME OVER ========== -->
+<div id="over" class="screen">
+<h1>Game Over</h1>
+<p id="finalScore"></p>
+<button onclick="startGame()">Jogar novamente</button>
+</div>
+
+</div>
+
 <script>
 
+// ================= CANVAS =================
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
-
 canvas.width=420;
 canvas.height=420;
+
+// ================= SCREENS =================
+const menu=document.getElementById("menu");
+const gameScreen=document.getElementById("gameScreen");
+const over=document.getElementById("over");
 
 // ================= STATE =================
 let snake,food,dir,nextDir;
 let score=0,level=1;
 let speed=140,last=0;
 let paused=false;
+let best=localStorage.getItem("best")||0;
 
-// ================= AUDIO =================
+document.getElementById("best").textContent=best;
+
+// ================= AUDIO ENGINE =================
+let audioCtx=null;
+
+function unlockAudio(){
+if(!audioCtx){
+audioCtx=new (window.AudioContext||webkitAudioContext)();
+}
+}
+
 function beep(f){
-const a=new (AudioContext||webkitAudioContext)();
-const o=a.createOscillator();
+if(!audioCtx) return;
+const o=audioCtx.createOscillator();
+const g=audioCtx.createGain();
+
 o.frequency.value=f;
-o.connect(a.destination);
+g.gain.value=0.1;
+
+o.connect(g);
+g.connect(audioCtx.destination);
+
 o.start();
-o.stop(a.currentTime+0.08);
+o.stop(audioCtx.currentTime+0.08);
 }
 
 // ================= VIBRATION =================
@@ -138,8 +194,18 @@ function vib(ms){
 if(navigator.vibrate) navigator.vibrate(ms);
 }
 
-// ================= RESET =================
-function reset(){
+// ================= SCREEN NAV =================
+function show(screen){
+menu.classList.remove("active");
+gameScreen.classList.remove("active");
+over.classList.remove("active");
+screen.classList.add("active");
+}
+
+// ================= START GAME =================
+function startGame(){
+
+unlockAudio();
 
 snake=[
 {x:10,y:10},
@@ -153,13 +219,33 @@ nextDir=dir;
 score=0;
 level=1;
 speed=140;
+paused=false;
 
 document.getElementById("score").textContent=0;
 document.getElementById("level").textContent=1;
 
 spawn();
+
+show(gameScreen);
 }
 
+// ================= GAME OVER =================
+function gameOver(){
+
+if(score>best){
+best=score;
+localStorage.setItem("best",best);
+}
+
+document.getElementById("finalScore").textContent="Score: "+score;
+
+beep(120);
+vib(150);
+
+show(over);
+}
+
+// ================= SPAWN =================
 function spawn(){
 food={
 x:Math.floor(Math.random()*20),
@@ -174,30 +260,33 @@ dir=nextDir;
 
 let h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
 
-if(h.x<0||h.y<0||h.x>=20||h.y>=20||snake.some(s=>s.x===h.x&&s.y===h.y)){
-beep(120);
-vib(150);
-reset();
-return;
+if(
+h.x<0||h.y<0||h.x>=20||h.y>=20||
+snake.some(s=>s.x===h.x&&s.y===h.y)
+){
+return gameOver();
 }
 
 snake.unshift(h);
 
 if(h.x===food.x&&h.y===food.y){
+
 score++;
 document.getElementById("score").textContent=score;
 
 beep(600);
-vib(30);
+vib(20);
 
 if(score%5===0){
 level++;
 document.getElementById("level").textContent=level;
-speed=Math.max(60,speed-8);
+speed=Math.max(55,speed-8);
 beep(900);
+vib(60);
 }
 
 spawn();
+
 }else{
 snake.pop();
 }
@@ -223,7 +312,7 @@ ctx.fillRect(s.x*20,s.y*20,20,20);
 // ================= LOOP =================
 function loop(t){
 
-if(!paused){
+if(gameScreen.classList.contains("active") && !paused){
 if(t-last>speed){
 move();
 last=t;
@@ -234,22 +323,31 @@ draw();
 requestAnimationFrame(loop);
 }
 
+// ================= PAUSE =================
+function togglePause(){
+paused=!paused;
+}
+
 // ================= INPUT =================
 document.addEventListener("keydown",e=>{
+
+unlockAudio();
 
 if(e.key==="ArrowUp") nextDir={x:0,y:-1};
 if(e.key==="ArrowDown") nextDir={x:0,y:1};
 if(e.key==="ArrowLeft") nextDir={x:-1,y:0};
 if(e.key==="ArrowRight") nextDir={x:1,y:0};
 
-if(e.code==="Space") paused=!paused;
+if(e.code==="Space") togglePause();
 });
 
-// ================= D-PAD FIXED =================
-document.querySelectorAll("[data-dir]").forEach(btn=>{
-btn.addEventListener("click",()=>{
+// ================= DPAD =================
+document.querySelectorAll("[data-dir]").forEach(b=>{
+b.addEventListener("click",()=>{
 
-const d=btn.getAttribute("data-dir");
+unlockAudio();
+
+let d=b.getAttribute("data-dir");
 
 if(d==="up") nextDir={x:0,y:-1};
 if(d==="down") nextDir={x:0,y:1};
@@ -261,8 +359,8 @@ vib(20);
 });
 });
 
-// ================= START =================
-reset();
+// ================= START LOOP =================
+spawn();
 requestAnimationFrame(loop);
 
 </script>
