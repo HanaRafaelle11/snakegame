@@ -3,29 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake Play Store Edition</title>
+<title>Snake FIX FINAL</title>
 
 <style>
+*{box-sizing:border-box;}
+
 body{
 margin:0;
-font-family:system-ui;
 background:#0b1220;
 color:white;
+font-family:system-ui;
+
+/* FIX PRINCIPAL */
+height:100vh;
 display:flex;
 justify-content:center;
 align-items:center;
-height:100vh;
 overflow:hidden;
 }
 
-/* ===== APP CONTAINER ===== */
+/* APP */
 .app{
 width:100%;
 max-width:460px;
+padding:10px;
 text-align:center;
 }
 
-/* ===== SCREENS ===== */
+/* SCREENS */
 .screen{
 display:none;
 flex-direction:column;
@@ -37,17 +42,31 @@ gap:12px;
 display:flex;
 }
 
-/* ===== CANVAS ===== */
+/* HUD FIX SEM CORTAR */
+.hud{
+width:100%;
+display:flex;
+justify-content:space-between;
+font-size:14px;
+padding:10px;
+background:rgba(255,255,255,.06);
+border-radius:12px;
+}
+
+/* CANVAS FIX */
 canvas{
+width:100%;
+max-width:420px;
+aspect-ratio:1;
 background:#0f172a;
 border-radius:16px;
-box-shadow:0 25px 70px rgba(0,0,0,.6);
+box-shadow:0 25px 60px rgba(0,0,0,.6);
 touch-action:none;
 }
 
-/* ===== BUTTON ===== */
+/* BUTTON */
 button{
-padding:12px 18px;
+padding:12px 16px;
 border:none;
 border-radius:12px;
 background:#38bdf8;
@@ -55,17 +74,9 @@ font-weight:bold;
 cursor:pointer;
 }
 
-/* ===== HUD ===== */
-.hud{
-display:flex;
-justify-content:space-between;
-width:100%;
-padding:10px;
-font-size:14px;
-opacity:.9;
-}
+button:active{transform:scale(.95);}
 
-/* ===== DPAD ===== */
+/* DPAD */
 .dpad{
 margin-top:10px;
 display:grid;
@@ -96,20 +107,20 @@ border-radius:14px;
 
 <div class="app">
 
-<!-- ========== MENU ========== -->
+<!-- MENU -->
 <div id="menu" class="screen active">
 <h1>🐍 Snake</h1>
-<p>Play Store Edition</p>
+<p>Pressione jogar</p>
 <button onclick="startGame()">Jogar</button>
 </div>
 
-<!-- ========== GAME ========== -->
+<!-- GAME -->
 <div id="gameScreen" class="screen">
 
 <div class="hud">
 <div>Score: <span id="score">0</span></div>
 <div>Level: <span id="level">1</span></div>
-<div>Best: <span id="best">0</span></div>
+<div>High: <span id="high">0</span></div>
 </div>
 
 <canvas id="game"></canvas>
@@ -134,78 +145,45 @@ border-radius:14px;
 
 </div>
 
-<!-- ========== GAME OVER ========== -->
+<!-- GAME OVER -->
 <div id="over" class="screen">
 <h1>Game Over</h1>
-<p id="finalScore"></p>
-<button onclick="startGame()">Jogar novamente</button>
+<p id="final"></p>
+<button onclick="backToMenu()">Voltar ao Menu</button>
 </div>
 
 </div>
 
 <script>
 
-// ================= CANVAS =================
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
+
 canvas.width=420;
 canvas.height=420;
 
-// ================= SCREENS =================
 const menu=document.getElementById("menu");
 const gameScreen=document.getElementById("gameScreen");
 const over=document.getElementById("over");
 
-// ================= STATE =================
 let snake,food,dir,nextDir;
-let score=0,level=1;
-let speed=140,last=0;
+let score=0;
+let level=1;
+let speed=140;
+let last=0;
 let paused=false;
-let best=localStorage.getItem("best")||0;
 
-document.getElementById("best").textContent=best;
+let high=localStorage.getItem("high")||0;
+document.getElementById("high").textContent=high;
 
-// ================= AUDIO ENGINE =================
-let audioCtx=null;
-
-function unlockAudio(){
-if(!audioCtx){
-audioCtx=new (window.AudioContext||webkitAudioContext)();
-}
-}
-
-function beep(f){
-if(!audioCtx) return;
-const o=audioCtx.createOscillator();
-const g=audioCtx.createGain();
-
-o.frequency.value=f;
-g.gain.value=0.1;
-
-o.connect(g);
-g.connect(audioCtx.destination);
-
-o.start();
-o.stop(audioCtx.currentTime+0.08);
-}
-
-// ================= VIBRATION =================
-function vib(ms){
-if(navigator.vibrate) navigator.vibrate(ms);
-}
-
-// ================= SCREEN NAV =================
-function show(screen){
+function show(s){
 menu.classList.remove("active");
 gameScreen.classList.remove("active");
 over.classList.remove("active");
-screen.classList.add("active");
+s.classList.add("active");
 }
 
-// ================= START GAME =================
 function startGame(){
-
-unlockAudio();
 
 snake=[
 {x:10,y:10},
@@ -225,27 +203,25 @@ document.getElementById("score").textContent=0;
 document.getElementById("level").textContent=1;
 
 spawn();
-
 show(gameScreen);
 }
 
-// ================= GAME OVER =================
-function gameOver(){
-
-if(score>best){
-best=score;
-localStorage.setItem("best",best);
+function backToMenu(){
+show(menu);
 }
 
-document.getElementById("finalScore").textContent="Score: "+score;
+function gameOver(){
 
-beep(120);
-vib(150);
+if(score>high){
+high=score;
+localStorage.setItem("high",high);
+document.getElementById("high").textContent=high;
+}
 
+document.getElementById("final").textContent="Score: "+score;
 show(over);
 }
 
-// ================= SPAWN =================
 function spawn(){
 food={
 x:Math.floor(Math.random()*20),
@@ -253,7 +229,6 @@ y:Math.floor(Math.random()*20)
 };
 }
 
-// ================= MOVE =================
 function move(){
 
 dir=nextDir;
@@ -274,15 +249,10 @@ if(h.x===food.x&&h.y===food.y){
 score++;
 document.getElementById("score").textContent=score;
 
-beep(600);
-vib(20);
-
 if(score%5===0){
 level++;
 document.getElementById("level").textContent=level;
-speed=Math.max(55,speed-8);
-beep(900);
-vib(60);
+speed=Math.max(60,speed-10);
 }
 
 spawn();
@@ -292,24 +262,20 @@ snake.pop();
 }
 }
 
-// ================= DRAW =================
 function draw(){
 
 ctx.fillStyle="#0b1220";
 ctx.fillRect(0,0,420,420);
 
-// food
 ctx.fillStyle="red";
 ctx.fillRect(food.x*20,food.y*20,20,20);
 
-// snake
 snake.forEach((s,i)=>{
 ctx.fillStyle=i===0?"#4ade80":"#22c55e";
 ctx.fillRect(s.x*20,s.y*20,20,20);
 });
 }
 
-// ================= LOOP =================
 function loop(t){
 
 if(gameScreen.classList.contains("active") && !paused){
@@ -323,15 +289,11 @@ draw();
 requestAnimationFrame(loop);
 }
 
-// ================= PAUSE =================
 function togglePause(){
 paused=!paused;
 }
 
-// ================= INPUT =================
 document.addEventListener("keydown",e=>{
-
-unlockAudio();
 
 if(e.key==="ArrowUp") nextDir={x:0,y:-1};
 if(e.key==="ArrowDown") nextDir={x:0,y:1};
@@ -341,11 +303,8 @@ if(e.key==="ArrowRight") nextDir={x:1,y:0};
 if(e.code==="Space") togglePause();
 });
 
-// ================= DPAD =================
 document.querySelectorAll("[data-dir]").forEach(b=>{
 b.addEventListener("click",()=>{
-
-unlockAudio();
 
 let d=b.getAttribute("data-dir");
 
@@ -354,13 +313,10 @@ if(d==="down") nextDir={x:0,y:1};
 if(d==="left") nextDir={x:-1,y:0};
 if(d==="right") nextDir={x:1,y:0};
 
-beep(300);
-vib(20);
 });
 });
 
-// ================= START LOOP =================
-spawn();
+show(menu);
 requestAnimationFrame(loop);
 
 </script>
