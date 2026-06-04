@@ -3,22 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake Mobile Pro</title>
+<title>Snake FIX Stable</title>
 
 <style>
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:system-ui;
-}
-
 body{
+margin:0;
 height:100vh;
 display:flex;
 justify-content:center;
 align-items:center;
 background:#0b1220;
+font-family:system-ui;
 color:white;
 overflow:hidden;
 }
@@ -33,34 +28,33 @@ padding:10px;
 .screen{display:none;}
 .screen.active{display:block;}
 
-.hud{
-display:flex;
-justify-content:space-between;
-padding:10px;
-background:rgba(255,255,255,.06);
-border-radius:12px;
-font-size:14px;
-margin-bottom:10px;
-}
-
 canvas{
 width:100%;
 max-width:420px;
 aspect-ratio:1;
 background:#0f172a;
 border-radius:16px;
-box-shadow:0 20px 60px rgba(0,0,0,.5);
-touch-action:none;
+display:block;
+margin:auto;
 }
 
-/* BOTÕES MOBILE */
+button{
+padding:12px 16px;
+border:none;
+border-radius:12px;
+background:#38bdf8;
+font-weight:bold;
+margin-top:10px;
+}
+
+/* DPAD SEMPRE VISÍVEL NO MOBILE */
 .dpad{
 display:grid;
 grid-template-columns:80px 80px 80px;
 grid-template-rows:80px 80px 80px;
 gap:10px;
 justify-content:center;
-margin-top:12px;
+margin-top:10px;
 }
 
 .dpad button{
@@ -70,29 +64,10 @@ border-radius:16px;
 border:none;
 background:rgba(255,255,255,.08);
 color:white;
-font-size:26px;
-font-weight:bold;
+font-size:24px;
 }
 
-.dpad button:active{
-transform:scale(.9);
-background:rgba(255,255,255,.2);
-}
-
-.dpad div{
-width:80px;
-height:80px;
-}
-
-button{
-padding:12px 16px;
-border:none;
-border-radius:12px;
-background:#38bdf8;
-font-weight:bold;
-cursor:pointer;
-margin-top:10px;
-}
+.dpad div{width:80px;height:80px;}
 
 @media(min-width:768px){
 .dpad{display:none;}
@@ -104,27 +79,19 @@ margin-top:10px;
 
 <div class="app">
 
-<!-- MENU -->
 <div id="menu" class="screen active">
 <h1>🐍 Snake</h1>
-<p>Mobile Pro Edition</p>
-<button onclick="startGame()">Jogar</button>
+<button onclick="start()">Jogar</button>
 </div>
 
-<!-- GAME -->
-<div id="gameScreen" class="screen">
+<div id="game" class="screen">
 
-<div class="hud">
+<canvas id="c"></canvas>
+
 <div>Score: <span id="score">0</span></div>
-<div>Level: <span id="level">1</span></div>
-<div>High: <span id="high">0</span></div>
-</div>
 
-<canvas id="game"></canvas>
+<button onclick="pause()">Pause</button>
 
-<button onclick="togglePause()">⏸ Pause</button>
-
-<!-- DPAD MOBILE -->
 <div class="dpad">
 <div></div>
 <button data-dir="up">⬆</button>
@@ -141,11 +108,9 @@ margin-top:10px;
 
 </div>
 
-<!-- GAME OVER -->
 <div id="over" class="screen">
 <h1>Game Over</h1>
-<p id="final"></p>
-<button onclick="startGame()">Jogar novamente</button>
+<button onclick="start()">Reiniciar</button>
 </div>
 
 </div>
@@ -153,60 +118,57 @@ margin-top:10px;
 <script>
 
 // ================= CANVAS =================
-const canvas=document.getElementById("game");
+const canvas=document.getElementById("c");
 const ctx=canvas.getContext("2d");
 
 canvas.width=420;
 canvas.height=420;
 
-// ================= UI =================
+// ================= SCREENS =================
 const menu=document.getElementById("menu");
-const gameScreen=document.getElementById("gameScreen");
+const game=document.getElementById("game");
 const over=document.getElementById("over");
 
 // ================= STATE =================
-let snake,food,dir,nextDir;
-let score=0;
-let level=1;
-let speed=140;
-let last=0;
+let snake=[];
+let food={x:10,y:10};
+let dir={x:1,y:0};
+let next={x:1,y:0};
+let running=false;
 let paused=false;
-let state="menu";
+let last=0;
+let speed=140;
+let score=0;
 
-let high=localStorage.getItem("high")||0;
-document.getElementById("high").textContent=high;
+// ================= AUDIO SAFE =================
+let audio=null;
 
-// ================= AUDIO (WEB AUDIO API) =================
-let audioCtx=null;
-
-function sound(freq,duration=0.08){
-if(!audioCtx){
-audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq){
+try{
+if(!audio){
+audio=new (window.AudioContext||window.webkitAudioContext)();
 }
-
-const o=audioCtx.createOscillator();
-const g=audioCtx.createGain();
-
+let o=audio.createOscillator();
+let g=audio.createGain();
 o.frequency.value=freq;
 g.gain.value=0.1;
-
 o.connect(g);
-g.connect(audioCtx.destination);
-
+g.connect(audio.destination);
 o.start();
-o.stop(audioCtx.currentTime+duration);
+o.stop(audio.currentTime+0.08);
+}catch(e){}
 }
 
-// ================= SCREEN =================
+// ================= UI =================
 function show(s){
 menu.classList.remove("active");
-gameScreen.classList.remove("active");
+game.classList.remove("active");
 over.classList.remove("active");
 s.classList.add("active");
 }
 
 // ================= START =================
-function startGame(){
+function start(){
 
 snake=[
 {x:10,y:10},
@@ -215,19 +177,18 @@ snake=[
 ];
 
 dir={x:1,y:0};
-nextDir=dir;
+next={x:1,y:0};
 
 score=0;
-level=1;
-speed=140;
 paused=false;
-state="play";
+running=true;
 
 document.getElementById("score").textContent=0;
-document.getElementById("level").textContent=1;
 
 spawn();
-show(gameScreen);
+show(game);
+
+draw();
 }
 
 // ================= SPAWN =================
@@ -240,27 +201,20 @@ y:Math.floor(Math.random()*20)
 
 // ================= GAME OVER =================
 function gameOver(){
-
-state="over";
-
-if(score>high){
-high=score;
-localStorage.setItem("high",high);
-document.getElementById("high").textContent=high;
-}
-
-document.getElementById("final").textContent="Score: "+score;
-
-sound(120,0.2);
+running=false;
+beep(120);
 show(over);
 }
 
 // ================= UPDATE =================
 function update(){
 
-dir=nextDir;
+dir=next;
 
-let h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+let h={
+x:snake[0].x+dir.x,
+y:snake[0].y+dir.y
+};
 
 if(
 h.x<0||h.y<0||h.x>=20||h.y>=20||
@@ -273,21 +227,10 @@ return;
 snake.unshift(h);
 
 if(h.x===food.x&&h.y===food.y){
-
 score++;
 document.getElementById("score").textContent=score;
-
-sound(600);
-
-if(score%5===0){
-level++;
-document.getElementById("level").textContent=level;
-speed=Math.max(60,speed-10);
-sound(900);
-}
-
+beep(600);
 spawn();
-
 }else{
 snake.pop();
 }
@@ -302,10 +245,10 @@ ctx.fillRect(0,0,420,420);
 ctx.fillStyle="red";
 ctx.fillRect(food.x*20,food.y*20,20,20);
 
-snake.forEach((s,i)=>{
+for(let i=0;i<snake.length;i++){
 ctx.fillStyle=i===0?"#4ade80":"#22c55e";
-ctx.fillRect(s.x*20,s.y*20,20,20);
-});
+ctx.fillRect(snake[i].x*20,snake[i].y*20,20,20);
+}
 }
 
 // ================= LOOP =================
@@ -313,7 +256,7 @@ function loop(t){
 
 requestAnimationFrame(loop);
 
-if(state!=="play"){
+if(!running){
 draw();
 return;
 }
@@ -329,35 +272,33 @@ draw();
 }
 
 // ================= PAUSE =================
-function togglePause(){
+function pause(){
 paused=!paused;
 }
 
 // ================= KEYBOARD =================
 document.addEventListener("keydown",e=>{
 
-if(e.key==="ArrowUp") nextDir={x:0,y:-1};
-if(e.key==="ArrowDown") nextDir={x:0,y:1};
-if(e.key==="ArrowLeft") nextDir={x:-1,y:0};
-if(e.key==="ArrowRight") nextDir={x:1,y:0};
+if(e.key==="ArrowUp") next={x:0,y:-1};
+if(e.key==="ArrowDown") next={x:0,y:1};
+if(e.key==="ArrowLeft") next={x:-1,y:0};
+if(e.key==="ArrowRight") next={x:1,y:0};
 
-if(e.code==="Space") togglePause();
+if(e.code==="Space") pause();
 });
 
-// ================= MOBILE DPAD =================
+// ================= MOBILE =================
 document.querySelectorAll("[data-dir]").forEach(b=>{
 b.addEventListener("click",()=>{
 
-if(state!=="play") return;
-
 let d=b.dataset.dir;
 
-if(d==="up") nextDir={x:0,y:-1};
-if(d==="down") nextDir={x:0,y:1};
-if(d==="left") nextDir={x:-1,y:0};
-if(d==="right") nextDir={x:1,y:0};
+if(d==="up") next={x:0,y:-1};
+if(d==="down") next={x:0,y:1};
+if(d==="left") next={x:-1,y:0};
+if(d==="right") next={x:1,y:0};
 
-sound(300,0.05);
+beep(300);
 
 });
 });
