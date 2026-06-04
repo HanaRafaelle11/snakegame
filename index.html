@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake FIX Stable</title>
+<title>Snake Final Fix</title>
 
 <style>
 body{
@@ -28,6 +28,16 @@ padding:10px;
 .screen{display:none;}
 .screen.active{display:block;}
 
+.hud{
+display:flex;
+justify-content:space-between;
+padding:10px;
+font-size:14px;
+background:rgba(255,255,255,.06);
+border-radius:10px;
+margin-bottom:10px;
+}
+
 canvas{
 width:100%;
 max-width:420px;
@@ -47,7 +57,7 @@ font-weight:bold;
 margin-top:10px;
 }
 
-/* DPAD SEMPRE VISÍVEL NO MOBILE */
+/* DPAD */
 .dpad{
 display:grid;
 grid-template-columns:80px 80px 80px;
@@ -79,16 +89,22 @@ font-size:24px;
 
 <div class="app">
 
+<!-- MENU -->
 <div id="menu" class="screen active">
 <h1>🐍 Snake</h1>
 <button onclick="start()">Jogar</button>
 </div>
 
+<!-- GAME -->
 <div id="game" class="screen">
 
-<canvas id="c"></canvas>
-
+<div class="hud">
 <div>Score: <span id="score">0</span></div>
+<div>Level: <span id="level">1</span></div>
+<div>Best: <span id="best">0</span></div>
+</div>
+
+<canvas id="c"></canvas>
 
 <button onclick="pause()">Pause</button>
 
@@ -108,6 +124,7 @@ font-size:24px;
 
 </div>
 
+<!-- GAME OVER -->
 <div id="over" class="screen">
 <h1>Game Over</h1>
 <button onclick="start()">Reiniciar</button>
@@ -124,42 +141,39 @@ const ctx=canvas.getContext("2d");
 canvas.width=420;
 canvas.height=420;
 
-// ================= SCREENS =================
+// ================= UI =================
 const menu=document.getElementById("menu");
 const game=document.getElementById("game");
 const over=document.getElementById("over");
 
 // ================= STATE =================
-let snake=[];
-let food={x:10,y:10};
-let dir={x:1,y:0};
-let next={x:1,y:0};
-let running=false;
-let paused=false;
-let last=0;
-let speed=140;
-let score=0;
+let snake,food,dir,next;
+let score=0,level=1,best=localStorage.getItem("best")||0;
+let speed=140,last=0;
+let running=false,paused=false;
 
-// ================= AUDIO SAFE =================
+// ================= AUDIO FIX =================
 let audio=null;
 
-function beep(freq){
-try{
+function unlockAudio(){
 if(!audio){
 audio=new (window.AudioContext||window.webkitAudioContext)();
 }
-let o=audio.createOscillator();
-let g=audio.createGain();
+}
+
+function beep(freq){
+if(!audio) return;
+const o=audio.createOscillator();
+const g=audio.createGain();
 o.frequency.value=freq;
-g.gain.value=0.1;
+g.gain.value=0.08;
 o.connect(g);
 g.connect(audio.destination);
 o.start();
 o.stop(audio.currentTime+0.08);
-}catch(e){}
 }
 
-// ================= UI =================
+// ================= SCREEN =================
 function show(s){
 menu.classList.remove("active");
 game.classList.remove("active");
@@ -170,6 +184,8 @@ s.classList.add("active");
 // ================= START =================
 function start(){
 
+unlockAudio();
+
 snake=[
 {x:10,y:10},
 {x:9,y:10},
@@ -177,18 +193,20 @@ snake=[
 ];
 
 dir={x:1,y:0};
-next={x:1,y:0};
+next=dir;
 
 score=0;
+level=1;
+speed=140;
 paused=false;
 running=true;
 
 document.getElementById("score").textContent=0;
+document.getElementById("level").textContent=1;
+document.getElementById("best").textContent=best;
 
 spawn();
 show(game);
-
-draw();
 }
 
 // ================= SPAWN =================
@@ -201,7 +219,14 @@ y:Math.floor(Math.random()*20)
 
 // ================= GAME OVER =================
 function gameOver(){
+
 running=false;
+
+if(score>best){
+best=score;
+localStorage.setItem("best",best);
+}
+
 beep(120);
 show(over);
 }
@@ -211,10 +236,7 @@ function update(){
 
 dir=next;
 
-let h={
-x:snake[0].x+dir.x,
-y:snake[0].y+dir.y
-};
+let h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
 
 if(
 h.x<0||h.y<0||h.x>=20||h.y>=20||
@@ -227,10 +249,21 @@ return;
 snake.unshift(h);
 
 if(h.x===food.x&&h.y===food.y){
+
 score++;
 document.getElementById("score").textContent=score;
+
 beep(600);
+
+if(score%5===0){
+level++;
+document.getElementById("level").textContent=level;
+speed=Math.max(60,speed-10);
+beep(900);
+}
+
 spawn();
+
 }else{
 snake.pop();
 }
@@ -245,10 +278,10 @@ ctx.fillRect(0,0,420,420);
 ctx.fillStyle="red";
 ctx.fillRect(food.x*20,food.y*20,20,20);
 
-for(let i=0;i<snake.length;i++){
+snake.forEach((s,i)=>{
 ctx.fillStyle=i===0?"#4ade80":"#22c55e";
-ctx.fillRect(snake[i].x*20,snake[i].y*20,20,20);
-}
+ctx.fillRect(s.x*20,s.y*20,20,20);
+});
 }
 
 // ================= LOOP =================
@@ -256,12 +289,10 @@ function loop(t){
 
 requestAnimationFrame(loop);
 
-if(!running){
+if(!running || paused){
 draw();
 return;
 }
-
-if(paused) return;
 
 if(t-last>speed){
 update();
@@ -279,6 +310,8 @@ paused=!paused;
 // ================= KEYBOARD =================
 document.addEventListener("keydown",e=>{
 
+unlockAudio();
+
 if(e.key==="ArrowUp") next={x:0,y:-1};
 if(e.key==="ArrowDown") next={x:0,y:1};
 if(e.key==="ArrowLeft") next={x:-1,y:0};
@@ -290,6 +323,8 @@ if(e.code==="Space") pause();
 // ================= MOBILE =================
 document.querySelectorAll("[data-dir]").forEach(b=>{
 b.addEventListener("click",()=>{
+
+unlockAudio();
 
 let d=b.dataset.dir;
 
